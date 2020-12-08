@@ -1,19 +1,24 @@
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from xgboost import XGBRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.neural_network import MLPRegressor
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn import linear_model
+from sklearn.model_selection import cross_val_score
+
 # import seaborn as sns
 # import joblib
 # import random
 # import math
 
 
-# In[2]:
-
-
 # Downloading Data
 # The variable dataset size determines how big of a dataset is imported
 # 1 = 2019 data, 2= 2019+2018, 3 = ...
+
 dataset_sz = 1
 
 stem = "../data/pbp-201"
@@ -96,8 +101,8 @@ print(X.shape)
 # split data to train and test
 x_training_data, x_test_data, y_training_data, y_test_data = train_test_split(X, y, test_size=0.1)
 
-# function that allows us to set up a prediction interval
 
+# function that allows us to set up a prediction interval
 
 def log_cosh_quantile(alpha):
     def _log_cosh_quantile(y_true, y_pred):
@@ -109,38 +114,20 @@ def log_cosh_quantile(alpha):
     return _log_cosh_quantile
 
 
-# initialize model for middle prediction
-model = XGBRegressor(verbosity=1, objective=log_cosh_quantile(0.5))
+# xg boost regressor
+xgboost = GradientBoostingRegressor()
+xgboost.fit(x_training_data, y_training_data)
 
-
-# fit model for middle prediction
-model.fit(X, y)
-
-# rename model as "modelf"
-modelf = model.fit(X, y)
 
 # the column names that will be included in prediction
 pred_cols = x_test_data.columns
-
-
-alpha = 0.95  # 95% prediction interval
-
-# initialize model that predicts too high (top 2.5%)
-upper_model = XGBRegressor(verbosity=1, objective=log_cosh_quantile(alpha))
-
-# initialize model that predicts too low (bottom 2.5%)
-lower_model = XGBRegressor(verbosity=1, objective=log_cosh_quantile(1 - alpha))
-
-# train upper and lower models of prediction interval
-upper_model = upper_model.fit(X, y)
-lower_model = lower_model.fit(X, y)
 
 
 # Input the information in the correct columns below to make a prediction, leave the play type column blank as the model will determine
 # which play type maximizes the yards gained or points within a situation. Leave Yards blank too obv
 
 # row of data used to predict
-datum = dgci.iloc[2]
+datum = dgci.iloc[5]
 
 # transpose for some reason
 datum = pd.DataFrame(datum).T
@@ -157,7 +144,7 @@ preds = []
 # not sure why
 prediction_values = pd.DataFrame(np.zeros([117, 117]), columns=np.asarray(pred_cols))
 
-p_vals = pd.DataFrame(prediction_values.iloc[2]).T
+p_vals = pd.DataFrame(prediction_values.iloc[5]).T
 
 datum = pd.get_dummies(datum, columns=cats).drop("Yards", axis=1)
 
@@ -176,15 +163,11 @@ for x in PT:
         dummy["IsPass"] = 0
         dummy["IsRush"] = 1
     dummy["PlayType_" + x] = 1
-    preds.append([upper_model.predict(dummy)[0], modelf.predict(dummy)[0], lower_model.predict(dummy)[0]])
+    preds.append(xgboost.predict(dummy))
+
+print(preds)
 
 to_go = p_vals["ToGo"].iloc[0].item()
-
-preds[0].sort(reverse=True)
-preds[1].sort(reverse=True)
-pass_yards_hi, pass_yards_mid, pass_yards_lo, rush_yards_hi, rush_yards_mid, rush_yards_lo = preds[0][0], preds[0][1], preds[0][2], preds[1][0], preds[1][1], preds[1][2]
-
-print(pass_yards_hi, pass_yards_mid, pass_yards_lo, rush_yards_hi, rush_yards_mid, rush_yards_lo)
 
 '''
 * doesn't handle running down clock
